@@ -9,13 +9,34 @@ import logging
 # Configure logging
 setup_logging()
 
-class WELLDataPreProcessor:
+class WELLDataProcessor:
     def __init__(self, dataset_name : str, timesteps : int):
+        """
+        Initialize the WELL Data Processor.
+        
+        Args:
+            dataset_name (str): Name of the dataset to process (e.g., 'shear_flow', 'rayleigh_benard')
+            timesteps (int): Number of timesteps per trajectory in the dataset
+        
+        Returns:
+            None
+        """
         self.well_base_path = "hf://datasets/polymathic-ai/"
         self.dataset_name = dataset_name
         self.timesteps = timesteps 
     
     def _extract_and_process(self, split_name: str, frame_number: int, downsample: bool = False):
+        """
+        Extract and process a specific frame from all trajectories in a split.
+        
+        Args:
+            split_name (str): Name of the split to process (e.g., 'train', 'valid', 'test')
+            frame_number (int): Frame index to extract from each trajectory
+            downsample (bool, optional): Whether to downsample the field by a factor of 2. Defaults to False.
+        
+        Returns:
+            numpy.ndarray: Stacked array of processed frames with shape (n_trajectories, height, width)
+        """
         dataset = WellDataset(
             well_base_path=self.well_base_path,
             well_dataset_name=self.dataset_name,
@@ -46,6 +67,17 @@ class WELLDataPreProcessor:
         return np.stack(frames, axis=0)
 
     def process_single_split(self, split_name: str, frame_number: int, downsample: bool = False) -> str:
+        """
+        Process a single split and save it to a file.
+        
+        Args:
+            split_name (str): Name of the split to process (e.g., 'train', 'valid', 'test')
+            frame_number (int): Frame index to extract from each trajectory
+            downsample (bool, optional): Whether to downsample the field by a factor of 2. Defaults to False.
+        
+        Returns:
+            str: Path to the saved output file
+        """
         split_output_file = f"{self.dataset_name}_frame{frame_number}_{split_name}.npz"
         if Path(split_output_file).exists():
             logging.info(f"File {split_output_file} already exists. Skipping processing.")
@@ -66,6 +98,16 @@ class WELLDataPreProcessor:
         return split_output_file
     
     def concatenate_splits(self, frame_number: int, splits: list = None) -> str:
+        """
+        Concatenate multiple split files into a single file.
+        
+        Args:
+            frame_number (int): Frame number to concatenate (used in file naming)
+            splits (list, optional): List of split names to concatenate. Defaults to ['test', 'valid', 'train'].
+        
+        Returns:
+            str: Path to the concatenated output file
+        """
         output_file = f"{self.dataset_name}_frame{frame_number}.npz"
         if Path(output_file).exists():
             logging.info(f"File {output_file} already exists. Skipping concatenation.")
@@ -95,6 +137,18 @@ class WELLDataPreProcessor:
         return output_file
     
     def process_split_in_batches(self, split_name: str, frame_number: int, batch_size: int = 100, downsample: bool = False) -> list:
+        """
+        Process a split in batches and save each batch to a separate file.
+        
+        Args:
+            split_name (str): Name of the split to process (e.g., 'train', 'valid', 'test')
+            frame_number (int): Frame index to extract from each trajectory
+            batch_size (int, optional): Number of trajectories per batch. Defaults to 100.
+            downsample (bool, optional): Whether to downsample the field by a factor of 2. Defaults to False.
+        
+        Returns:
+            list: List of paths to the saved batch files
+        """
         dataset = WellDataset(
             well_base_path=self.well_base_path,
             well_dataset_name=self.dataset_name,
@@ -151,6 +205,17 @@ class WELLDataPreProcessor:
         return batch_files
     
     def concatenate_batches(self, split_name: str, frame_number: int, batch_files: list = None) -> str:
+        """
+        Concatenate batch files for a split into a single file.
+        
+        Args:
+            split_name (str): Name of the split (e.g., 'train', 'valid', 'test')
+            frame_number (int): Frame number (used in file naming)
+            batch_files (list, optional): List of batch file paths to concatenate. If None, auto-detects batch files. Defaults to None.
+        
+        Returns:
+            str: Path to the concatenated output file
+        """
         output_file = f"{self.dataset_name}_frame{frame_number}_{split_name}.npz"
         
         if Path(output_file).exists():
@@ -189,6 +254,16 @@ class WELLDataPreProcessor:
         return output_file
     
     def process_all_samples(self, frame_number: int, downsample: bool = False):
+        """
+        Process all splits (test, valid, train) and concatenate them into a single file.
+        
+        Args:
+            frame_number (int): Frame index to extract from each trajectory
+            downsample (bool, optional): Whether to downsample the field by a factor of 2. Defaults to False.
+        
+        Returns:
+            str: Path to the final concatenated output file
+        """
         output_file = f"{self.dataset_name}_frame{frame_number}.npz"
         if Path(output_file).exists():
             logging.info(f"File {output_file} already exists. Skipping processing.")
@@ -227,32 +302,44 @@ class WELLDataPreProcessor:
         np.savez_compressed(output_file, field=final_data)
         
         logging.info(f"Successfully saved to {output_file} (shape: {final_data.shape})")
-        
-if __name__ == "__main__":
-
-    shear_flow_data_preprocessor = WELLDataPreProcessor("shear_flow", 200)
-    shear_flow_data_preprocessor.concatenate_splits(60)
-
-'''
-    # Example: Process splits in batches (safer for memory)
-    rayleigh_benard_processor = WELLDataPreProcessor("rayleigh_benard", 200)
-    for split in ["test", "valid", "train"]:
-        # Process split in batches of 100 trajectories each
-        batch_files = rayleigh_benard_processor.process_split_in_batches(split, 60, batch_size=100)
-        # Concatenate all batches into a single split file
-        rayleigh_benard_processor.concatenate_batches(split, 60, batch_files)
-    # Finally concatenate all splits
-    rayleigh_benard_processor.concatenate_splits(60)
-'''
-
-'''
-    shear_flow_data_preprocessor = WELLDataPreProcessor("shear_flow", 200)
-
-    for split in ["test", "valid", "train"]:
-        shear_flow_data_preprocessor.process_single_split(split, 60, True)
-    shear_flow_data_preprocessor.concatenate_splits(60)
-'''
-
-    
+        return output_file
 
 
+"""
+USAGE EXAMPLE:
+
+# Example 1: Process all samples at once (simplest approach)
+processor = WELLDataProcessor(dataset_name='shear_flow', timesteps=61)
+output_file = processor.process_all_samples(frame_number=60, downsample=True)
+print(f"Processed dataset saved to: {output_file}")
+
+# Example 2: Process using batches (memory-efficient for large datasets)
+processor = WELLDataProcessor(dataset_name='rayleigh_benard', timesteps=61)
+
+# Process the train split in batches of 100 trajectories
+batch_files = processor.process_split_in_batches(
+    split_name='train',
+    frame_number=60,
+    batch_size=100,
+    downsample=True
+)
+print(f"Created {len(batch_files)} batch files")
+
+# Concatenate all batch files into a single split file
+split_file = processor.concatenate_batches(
+    split_name='train',
+    frame_number=60
+)
+print(f"Concatenated batches into: {split_file}")
+
+# Repeat for other splits (valid, test) then concatenate all splits
+processor.process_split_in_batches('valid', 60, batch_size=100, downsample=True)
+processor.concatenate_batches('valid', 60)
+
+processor.process_split_in_batches('test', 60, batch_size=100, downsample=True)
+processor.concatenate_batches('test', 60)
+
+# Finally, concatenate all splits into one file
+final_file = processor.concatenate_splits(frame_number=60, splits=['test', 'valid', 'train'])
+print(f"Final dataset saved to: {final_file}")
+"""
