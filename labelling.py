@@ -86,18 +86,18 @@ class LabelData:
             height_fig = 15
             width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
             fig, ax = plt.subplots(figsize=(width_fig, height_fig))
-            im = ax.imshow(trajectory_data.T, cmap='RdBu_r')
+            im = ax.imshow(trajectory_data.T, cmap='viridis')
         elif self.dataset_name == "shear_flow":
             # Shear flow: horizontal orientation without transpose (128x256)
             # aspect ratio = 256/128 = 2
             height_fig = 5
             width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
             fig, ax = plt.subplots(figsize=(width_fig, height_fig))
-            im = ax.imshow(trajectory_data, cmap='RdBu_r')
+            im = ax.imshow(trajectory_data, cmap='viridis')
         else:
             # Default visualization for other datasets
-            fig, ax = plt.subplots(figsize=(8, 8))
-            im = ax.imshow(trajectory_data, cmap='RdBu_r')
+            fig, ax = plt.subplots(figsize=(10,10))
+            im = ax.imshow(trajectory_data, cmap='viridis')
         
         # Remove ticks for cleaner appearance
         ax.set_xticks([])
@@ -471,7 +471,19 @@ if __name__ == "__main__":
         tokenizer_name="roberta-base",
         max_length=1024
     )
-    
+
+    smoke_labeler = LabelData("smoke", "/home/ammark/text2physics/text2physics-labelling/datasets/trajectory.npy")
+    labels = smoke_labeler.process_batches(
+        batch_size=10,
+        checkpoint_file="datasets/labeled/smoke_checkpoint.json"
+    )
+    output_file = smoke_labeler.tokenize_and_save(
+        labels=labels,
+        output_file="datasets/labeled/smoke_frame60_labeled.npz",
+        tokenizer_name="roberta-base",
+        max_length=1024
+    )
+
     # Optionally remove checkpoint after successful completion
     """
     checkpoint_file = "datasets/labeled/rayleigh_benard_checkpoint.json"
