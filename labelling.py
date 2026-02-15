@@ -38,7 +38,13 @@ class LabelData:
         """
         self.dataset_name = dataset_name
         self.file_path = file_path
-        self.data = np.load(file_path)['field']
+
+        if str(file_path).endswith('.npz'):
+            self.data = np.load(file_path)['field']
+        elif str(file_path).endswith('.npy'):
+            self.data = np.load(file_path)
+        else:
+            raise ValueError(f"Unsupported file path. Use .npz or .npy file. Got {file_path}")
         self.client = Anthropic(
             api_key=os.environ.get("ANTHROPIC_API_KEY")
         )
@@ -90,7 +96,7 @@ class LabelData:
             im = ax.imshow(trajectory_data, cmap='RdBu_r')
         else:
             # Default visualization for other datasets
-            fig, ax = plt.subplots(figsize=(8, 6))
+            fig, ax = plt.subplots(figsize=(8, 8))
             im = ax.imshow(trajectory_data, cmap='RdBu_r')
         
         # Remove ticks for cleaner appearance
@@ -256,7 +262,7 @@ class LabelData:
             max_length (int): Maximum token length for padding/truncation (default: 512)
         
         Returns:
-            tuple: (output_file path, list of raw label texts)
+            str: Path to the saved output file
         """
         print(f"\nTokenizing labels using {tokenizer_name}...")
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -294,6 +300,9 @@ class LabelData:
         
         # Get corresponding field data
         fields = self.data[sorted_indices]
+        
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         
         # Save tokenized data to NPZ file
         print(f"Saving labeled dataset to {output_file}...")
@@ -377,7 +386,7 @@ class LabelData:
                 output_file = f"datasets/labeled/{self.dataset_name}_frame60_test_batch.npz"
             
             # Tokenize and save
-            saved_file, raw_labels = self.tokenize_and_save(
+            saved_file = self.tokenize_and_save(
                 labels=labels,
                 output_file=output_file,
                 tokenizer_name=tokenizer_name,
@@ -392,13 +401,13 @@ class LabelData:
             test_data = np.load(saved_file, allow_pickle=True)
             print(f"Saved to: {saved_file}")
             print(f"\nDataset structure:")
-            print(f"  - labels:              {test_data['labels'].shape}")
+            print(f"  - label:               {test_data['label'].shape}")
             print(f"  - field:               {test_data['field'].shape}")
             
             # Show token length statistics
             tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
             token_lengths = []
-            for label_text in raw_labels:
+            for label_text in labels.values():
                 tokens = tokenizer.encode(label_text, add_special_tokens=True)
                 token_lengths.append(len(tokens))
             
@@ -451,20 +460,22 @@ class LabelData:
 
 if __name__ == "__main__":
 
-    rb_labeler = LabelData("rayleigh_benard", "/home/ammark/text2physics/text2physics-labelling/datasets/rayleigh_benard_frame60.npz")
-    labels = rb_labeler.process_batches(
+    tcf_labeler = LabelData("turbulent_channel_flow", "/home/ammark/text2physics/text2physics-labelling/datasets/tcf_trajectory.npy")
+    labels = tcf_labeler.process_batches(
         batch_size=10,
-        checkpoint_file="datasets/labeled/rayleigh_benard_checkpoint.json"
+        checkpoint_file="datasets/labeled/tcf_checkpoint.json"
     )
-    output_file = rb_labeler.tokenize_and_save(
+    output_file = tcf_labeler.tokenize_and_save(
         labels=labels,
-        output_file="datasets/labeled/rayleigh_benard_frame60_labeled.npz",
+        output_file="datasets/labeled/tcf_frame60_labeled.npz",
         tokenizer_name="roberta-base",
         max_length=1024
     )
     
     # Optionally remove checkpoint after successful completion
+    """
     checkpoint_file = "datasets/labeled/rayleigh_benard_checkpoint.json"
     if os.path.exists(checkpoint_file):
         os.remove(checkpoint_file)
         print(f"Checkpoint file removed: {checkpoint_file}")
+    """
