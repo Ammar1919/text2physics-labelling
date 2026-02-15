@@ -65,10 +65,6 @@ def get_prompt(flow_config, domain, quantity, dimension):
     - The overall spatial complexity.
 
     This summary must remain purely visual.
-
-    LENGTH CONSTRAINT (MANDATORY)
-    - Total output must be under 350 words.
-    - Do not add any extra sections, headers, or commentary.
-
+    
     END OF OUTPUT FORMAT
     """

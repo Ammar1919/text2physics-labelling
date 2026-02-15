@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import time
+import json
 from transformers import AutoTokenizer
 from tqdm import tqdm
 
@@ -18,6 +19,8 @@ from tqdm import tqdm
 
 3 - Attach labels 
 """
+
+# Add thinking/reasoning for model
 
 load_dotenv()
 
@@ -70,12 +73,29 @@ class LabelData:
         Returns:
             str: Base64-encoded PNG image string
         """
-        fig, ax = plt.subplots(figsize=(8, 6))
-        im = ax.imshow(trajectory_data, cmap='viridis', origin='lower', aspect='auto')
-        plt.colorbar(im, ax=ax)
-        ax.set_xlabel('Y')
-        ax.set_ylabel('X')
-        ax.set_title(f'{self.dataset_name} Trajectory')
+        # Use appropriate visualization based on dataset type
+        if self.dataset_name == "rayleigh_benard":
+            # Rayleigh-Bénard: vertical orientation with transpose (512x128 → 128x512)
+            # After transpose: width=128, height=512, aspect ratio = 128/512 = 0.25
+            height_fig = 15
+            width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
+            fig, ax = plt.subplots(figsize=(width_fig, height_fig))
+            im = ax.imshow(trajectory_data.T, cmap='RdBu_r')
+        elif self.dataset_name == "shear_flow":
+            # Shear flow: horizontal orientation without transpose (128x256)
+            # aspect ratio = 256/128 = 2
+            height_fig = 5
+            width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
+            fig, ax = plt.subplots(figsize=(width_fig, height_fig))
+            im = ax.imshow(trajectory_data, cmap='RdBu_r')
+        else:
+            # Default visualization for other datasets
+            fig, ax = plt.subplots(figsize=(8, 6))
+            im = ax.imshow(trajectory_data, cmap='RdBu_r')
+        
+        # Remove ticks for cleaner appearance
+        ax.set_xticks([])
+        ax.set_yticks([])
         
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
@@ -154,22 +174,44 @@ class LabelData:
             
             time.sleep(poll_interval)
     
-    def process_batches(self, batch_size: int = 10):
+    def process_batches(self, batch_size: int = 10, checkpoint_file: str = None):
         """
         Labels images in batches using the Anthropic Batch API.
 
         Args:
             batch_size (int): The no. of trajectories per batch (default is 10)
+            checkpoint_file (str): Path to save checkpoint JSON file (default: auto-generated)
         
         Returns:
             dict: Dictionary mapping trajectory indices to their labels
         """
+        # Set default checkpoint file
+        if checkpoint_file is None:
+            checkpoint_file = f"datasets/labeled/{self.dataset_name}_checkpoint.json"
+        
+        # Ensure checkpoint directory exists
+        os.makedirs(os.path.dirname(checkpoint_file), exist_ok=True)
+        
+        # Load existing checkpoint if available
         labels = {}
+        start_batch_idx = 0
+        if os.path.exists(checkpoint_file):
+            print(f"Found checkpoint file: {checkpoint_file}")
+            with open(checkpoint_file, 'r', encoding='utf-8') as f:
+                checkpoint_data = json.load(f)
+                labels = {int(k): v for k, v in checkpoint_data['labels'].items()}
+                start_batch_idx = checkpoint_data.get('last_batch_idx', 0) + 1
+            print(f"Resuming from batch {start_batch_idx + 1} with {len(labels)} existing labels\n")
+        
         batches_data = self._chunk_trajectories(batch_size)
         
         print(f"Processing {len(batches_data)} batches of {batch_size} trajectories each...\n")
         
         for batch_idx, batch_data in tqdm(enumerate(batches_data), total=len(batches_data), desc="Processing batches", unit="batch"):
+            # Skip already processed batches
+            if batch_idx < start_batch_idx:
+                continue
+            
             # Create and submit batch
             batch = self._generate_label(batch_data, batch_idx, batch_size)
             tqdm.write(f"Batch {batch_idx + 1}/{len(batches_data)} submitted with ID: {batch.id}")
@@ -186,8 +228,21 @@ class LabelData:
                     labels[trajectory_idx] = label
                 else:
                     tqdm.write(f"Request {result.custom_id} failed: {result.result.error}")
+            
+            # Save checkpoint after each batch
+            checkpoint_data = {
+                'labels': labels,
+                'last_batch_idx': batch_idx,
+                'total_batches': len(batches_data),
+                'batch_size': batch_size,
+                'dataset_name': self.dataset_name
+            }
+            with open(checkpoint_file, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
+            tqdm.write(f"  ✓ Checkpoint saved: {len(labels)} labels")
         
         print(f"\nCompleted! Generated {len(labels)} labels.")
+        print(f"Checkpoint saved to: {checkpoint_file}")
         return labels
     
     def tokenize_and_save(self, labels: dict, output_file: str, tokenizer_name: str = "bert-base-uncased", max_length: int = 512):
@@ -216,11 +271,11 @@ class LabelData:
         
         # Tokenize all labels
         tokenized_labels = []
-        raw_labels = []
+        raw_labels_dict = {}
         
         for idx in sorted_indices:
             label_text = labels[idx]
-            raw_labels.append(label_text)
+            raw_labels_dict[int(idx)] = label_text
             
             # Tokenize with padding and truncation
             tokens = tokenizer(
@@ -240,7 +295,7 @@ class LabelData:
         # Get corresponding field data
         fields = self.data[sorted_indices]
         
-        # Save to NPZ file
+        # Save tokenized data to NPZ file
         print(f"Saving labeled dataset to {output_file}...")
         np.savez_compressed(
             output_file,
@@ -248,13 +303,18 @@ class LabelData:
             field=fields
         )
         
+        # Save raw labels to JSON file
+        json_file = output_file.replace('.npz', '_raw_labels.json')
+        print(f"Saving raw labels to {json_file}...")
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(raw_labels_dict, f, indent=2, ensure_ascii=False)
+        
         print(f"Saved successfully!")
         print(f"  - Labels shape: {tokenized_labels_array.shape}")
         print(f"  - Fields shape: {fields.shape}")
         print(f"  - Tokenizer: {tokenizer_name}")
         print(f"  - Max length: {max_length}")
-
-        
+        print(f"  - Raw labels saved to: {json_file}")
 
         return output_file
 
@@ -359,14 +419,32 @@ class LabelData:
             # Restore original data
             self.data = original_data
     
-    def label(self):
-        labels = self.process_batches()
-        output_file, _ = self.tokenize_and_save(
+    def label(self, batch_size: int = 10, checkpoint_file: str = None, cleanup_checkpoint: bool = True):
+        """
+        Complete labeling pipeline with checkpointing support.
+        
+        Args:
+            batch_size (int): Number of trajectories per batch (default: 10)
+            checkpoint_file (str): Path to checkpoint file (default: auto-generated)
+            cleanup_checkpoint (bool): Whether to delete checkpoint after completion (default: True)
+        
+        Returns:
+            str: Path to the saved output file
+        """
+        labels = self.process_batches(batch_size=batch_size, checkpoint_file=checkpoint_file)
+        output_file = self.tokenize_and_save(
             labels=labels,
             output_file="datasets/shear_flow_frame60_labeled.npz",
             tokenizer_name="bert-base-uncased",
-            max_length=512
+            max_length=1024
         )
+        
+        # Optionally cleanup checkpoint file
+        if cleanup_checkpoint and checkpoint_file:
+            if os.path.exists(checkpoint_file):
+                os.remove(checkpoint_file)
+                print(f"Checkpoint file removed: {checkpoint_file}")
+        
         return output_file
 
 
@@ -374,11 +452,19 @@ class LabelData:
 if __name__ == "__main__":
 
     rb_labeler = LabelData("rayleigh_benard", "/home/ammark/text2physics/text2physics-labelling/datasets/rayleigh_benard_frame60.npz")
-    
-    labels = rb_labeler.process_batches()
+    labels = rb_labeler.process_batches(
+        batch_size=10,
+        checkpoint_file="datasets/labeled/rayleigh_benard_checkpoint.json"
+    )
     output_file = rb_labeler.tokenize_and_save(
         labels=labels,
         output_file="datasets/labeled/rayleigh_benard_frame60_labeled.npz",
         tokenizer_name="roberta-base",
-        max_length=512
+        max_length=1024
     )
+    
+    # Optionally remove checkpoint after successful completion
+    checkpoint_file = "datasets/labeled/rayleigh_benard_checkpoint.json"
+    if os.path.exists(checkpoint_file):
+        os.remove(checkpoint_file)
+        print(f"Checkpoint file removed: {checkpoint_file}")
