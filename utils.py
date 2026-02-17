@@ -47,3 +47,21 @@ def setup_logging():
     
     # Apply the filter to the root logger
     logging.getLogger().addFilter(MessageFilter())
+
+import numpy as np
+
+# Load the .npy file
+data = np.load('datasets/tcf_trajectory.npy')
+
+# Print shape and other info
+print(f"Shape: {data.shape}")
+print(f"Data type: {data.dtype}")
+print(f"Number of dimensions: {data.ndim}")
+print(f"Total elements: {data.size}")
+print(f"Memory size: {data.nbytes / (1024**2):.2f} MB")
+
+# If it's small enough, show min/max values
+if data.size < 1e8:  # Only if less than 100M elements
+    print(f"Min value: {np.min(data):.6f}")
+    print(f"Max value: {np.max(data):.6f}")
+    print(f"Mean value: {np.mean(data):.6f}")

@@ -5,13 +5,25 @@ DATASET_CONFIGS = {
         "flow_config": "Shear Flow",
         "domain": "periodic domain with parallel fluid layers moving at different velocities",
         "quantity": "tracer scalar field",
-        "dimension": "2d"
+        "dimension": "2D"
     },
     "rayleigh_benard": {
         "flow_config": "Rayleigh Benard Convection",
         "domain": "horizontal fluid layer heated from below and cooled from above",
         "quantity": "temperature field",
-        "dimension": "2d"
+        "dimension": "2D"
+    },
+    "turbulent_channel_flow": {
+        "flow_config": "Turbulent channel flow",
+        "domain": "flow between two flat plates driven by a constant pressure gradient in the streamwise direction",
+        "quantity": "velocity field",
+        "dimension": "2D"
+    },
+    "smoke": {
+        "flow_config": "Two-dimensional incompressible Navier–Stokes flow with buoyancy-driven forcing",
+        "domain": "Closed square cavity with no-slip wall boundaries",
+        "quantity": "Scalar smoke density field",
+        "dimension": "2D"
     }
 }
 

@@ -12,32 +12,25 @@ import json
 from transformers import AutoTokenizer
 from tqdm import tqdm
 
-"""
-1 - Visualize data?
-
-2 - Batch messages
-
-3 - Attach labels 
-"""
-
-# Add thinking/reasoning for model
-
 load_dotenv()
 
 class LabelData:
-    def __init__(self, dataset_name: str, file_path: Path):
+    def __init__(self, dataset_name: str, file_path: Path, reasoning_mode: bool = False, reasoning_tokens: int = 10000):
         """
         Initialize the Data Labeller
 
         Args:
             dataset (str): Name of the dataset to be labelled e.g. (shear flow, rayleigh benard)
             file_path (Path): root path of the dataset on the PC
-        
+            reasoning_model (bool): True if reasoning mode is enabled, False otherwise. Default value is False
+            reasoning_tokens (int): Number of budget_tokens to be provided if model is in reasoning mode. Default value is 10000
         Returns:
             None
         """
         self.dataset_name = dataset_name
         self.file_path = file_path
+        self.reasoning = reasoning_mode
+        self.reasoning_budget_tokens = reasoning_tokens
 
         if str(file_path).endswith('.npz'):
             self.data = np.load(file_path)['field']
@@ -114,6 +107,7 @@ class LabelData:
     def _generate_label(self, batch_data, batch_index, batch_size):
         """
         Create a batch request with separate requests for each trajectory.
+        Uses reasoning mode depending on class instance with a budget of 10,000 tokens
         
         Args:
             batch_data (numpy.ndarray): Array of trajectories with shape (n_trajectories, height, width)
@@ -124,6 +118,9 @@ class LabelData:
             dict: Batch object containing batch_id and status
         """
         requests = []
+
+        # uses fixed value of budget_tokens at 10000. 
+        thinking_config = {"type": "enabled", "budget_tokens": self.reasoning_budget_tokens} if self.reasoning else {"type": "disabled"}
         
         for i, trajectory in enumerate(batch_data):
             traj_idx = batch_index * batch_size + i
@@ -134,6 +131,7 @@ class LabelData:
                 "params": {
                     "model": self.model,
                     "max_tokens": 2048,
+                    "thinking": thinking_config,
                     "messages": [{
                         "role": "user",
                         "content": [
@@ -459,18 +457,6 @@ class LabelData:
 
 
 if __name__ == "__main__":
-
-    tcf_labeler = LabelData("turbulent_channel_flow", "/home/ammark/text2physics/text2physics-labelling/datasets/tcf_trajectory.npy")
-    labels = tcf_labeler.process_batches(
-        batch_size=10,
-        checkpoint_file="datasets/labeled/tcf_checkpoint.json"
-    )
-    output_file = tcf_labeler.tokenize_and_save(
-        labels=labels,
-        output_file="datasets/labeled/tcf_frame60_labeled.npz",
-        tokenizer_name="roberta-base",
-        max_length=1024
-    )
 
     smoke_labeler = LabelData("smoke", "/home/ammark/text2physics/text2physics-labelling/datasets/trajectory.npy")
     labels = smoke_labeler.process_batches(

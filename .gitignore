@@ -7,6 +7,12 @@ __pycache__/
 /*.npz 
 /*.npy
 
+*.npy
+*.npz
+
+# Raw JSON labels
+*.json
+
 # C extensions
 *.so
 
