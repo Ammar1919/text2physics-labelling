@@ -72,25 +72,18 @@ class LabelData:
         Returns:
             str: Base64-encoded PNG image string
         """
-        # Use appropriate visualization based on dataset type
+        # Standard visualization: compute figure width from data aspect ratio
         if self.dataset_name == "rayleigh_benard":
-            # Rayleigh-Bénard: vertical orientation with transpose (512x128 → 128x512)
-            # After transpose: width=128, height=512, aspect ratio = 128/512 = 0.25
-            height_fig = 15
-            width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
-            fig, ax = plt.subplots(figsize=(width_fig, height_fig))
-            im = ax.imshow(trajectory_data.T, cmap='viridis')
-        elif self.dataset_name == "shear_flow":
-            # Shear flow: horizontal orientation without transpose (128x256)
-            # aspect ratio = 256/128 = 2
-            height_fig = 5
-            width_fig = height_fig * (trajectory_data.shape[1] / trajectory_data.shape[0])
-            fig, ax = plt.subplots(figsize=(width_fig, height_fig))
-            im = ax.imshow(trajectory_data, cmap='viridis')
+            plot_data = trajectory_data.T
         else:
-            # Default visualization for other datasets
-            fig, ax = plt.subplots(figsize=(10,10))
-            im = ax.imshow(trajectory_data, cmap='viridis')
+            plot_data = trajectory_data
+
+        height_fig = 15
+        aspect_ratio = plot_data.shape[1] / plot_data.shape[0]
+        width_fig = height_fig * aspect_ratio
+
+        fig, ax = plt.subplots(figsize=(width_fig, height_fig))
+        im = ax.imshow(plot_data, cmap='viridis')
         
         # Remove ticks for cleaner appearance
         ax.set_xticks([])
@@ -249,7 +242,7 @@ class LabelData:
         print(f"Checkpoint saved to: {checkpoint_file}")
         return labels
     
-    def tokenize_and_save(self, labels: dict, output_file: str, tokenizer_name: str = "bert-base-uncased", max_length: int = 512):
+    def tokenize_and_save(self, labels: dict, output_file: str, tokenizer_name: str = "roberta-base", max_length: int = 1024):
         """
         Tokenize labels and save them with corresponding field data.
         
@@ -324,107 +317,6 @@ class LabelData:
         print(f"  - Raw labels saved to: {json_file}")
 
         return output_file
-
-    def test_first_batch(self, batch_size: int = 10, output_file: str = None, tokenizer_name: str = "bert-base-uncased", max_length: int = 512):
-        """
-        Test function to process only the first batch of trajectories.
-        
-        Args:
-            batch_size (int): Number of trajectories to process (default: 10)
-            output_file (str): Path to save test results. If None, uses default naming.
-            tokenizer_name (str): Hugging Face tokenizer to use (default: 'bert-base-uncased')
-            max_length (int): Maximum token length for padding/truncation (default: 512)
-        
-        Returns:
-            tuple: (labels dict, output_file path)
-        """
-        print(f"\n{'='*60}")
-        print(f"TEST MODE: Processing first {batch_size} trajectories only")
-        print(f"{'='*60}\n")
-        
-        # Temporarily store original data and limit to first batch
-        original_data = self.data
-        self.data = self.data[:batch_size]
-        
-        print(f"Dataset shape (test): {self.data.shape}")
-        print(f"Processing {batch_size} trajectories...\n")
-        
-        try:
-            # Create single batch request
-            batch_data = self.data
-            batch = self._generate_label(batch_data, batch_index=0, batch_size=batch_size)
-            print(f"Batch submitted with ID: {batch.id}")
-            
-            # Wait for completion
-            completed_batch = self._wait_for_batch(batch.id)
-            
-            # Retrieve results
-            labels = {}
-            print(f"\nRetrieving results...")
-            for result in self.client.messages.batches.results(batch.id):
-                if result.result.type == "succeeded":
-                    custom_id = result.custom_id
-                    trajectory_idx = int(custom_id.split('_')[1])
-                    label = result.result.message.content[0].text
-                    labels[trajectory_idx] = label
-                    
-                    # Show first label as example
-                    if trajectory_idx == 0:
-                        print(f"\nExample label (trajectory 0):")
-                        print(f"-" * 60)
-                        print(label[:300] + "..." if len(label) > 300 else label)
-                        print(f"-" * 60)
-                else:
-                    print(f"Request {result.custom_id} failed: {result.result.error}")
-            
-            print(f"\n✓ Generated {len(labels)} labels")
-            
-            # Set default output file name
-            if output_file is None:
-                output_file = f"datasets/labeled/{self.dataset_name}_frame60_test_batch.npz"
-            
-            # Tokenize and save
-            saved_file = self.tokenize_and_save(
-                labels=labels,
-                output_file=output_file,
-                tokenizer_name=tokenizer_name,
-                max_length=max_length
-            )
-            
-            # Load and display summary
-            print(f"\n{'='*60}")
-            print(f"TEST RESULTS SUMMARY")
-            print(f"{'='*60}")
-            
-            test_data = np.load(saved_file, allow_pickle=True)
-            print(f"Saved to: {saved_file}")
-            print(f"\nDataset structure:")
-            print(f"  - label:               {test_data['label'].shape}")
-            print(f"  - field:               {test_data['field'].shape}")
-            
-            # Show token length statistics
-            tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            token_lengths = []
-            for label_text in labels.values():
-                tokens = tokenizer.encode(label_text, add_special_tokens=True)
-                token_lengths.append(len(tokens))
-            
-            print(f"\nToken length statistics:")
-            print(f"  - Min:     {min(token_lengths)} tokens")
-            print(f"  - Max:     {max(token_lengths)} tokens")
-            print(f"  - Mean:    {np.mean(token_lengths):.1f} tokens")
-            print(f"  - Median:  {np.median(token_lengths):.0f} tokens")
-            
-            if max(token_lengths) > max_length:
-                print(f"\n⚠ Warning: {sum(1 for l in token_lengths if l > max_length)} labels exceed max_length={max_length}")
-            
-            print(f"{'='*60}\n")
-            
-            return labels, saved_file
-            
-        finally:
-            # Restore original data
-            self.data = original_data
     
     def label(self, batch_size: int = 10, checkpoint_file: str = None, cleanup_checkpoint: bool = True):
         """
@@ -469,11 +361,3 @@ if __name__ == "__main__":
         tokenizer_name="roberta-base",
         max_length=1024
     )
-
-    # Optionally remove checkpoint after successful completion
-    """
-    checkpoint_file = "datasets/labeled/rayleigh_benard_checkpoint.json"
-    if os.path.exists(checkpoint_file):
-        os.remove(checkpoint_file)
-        print(f"Checkpoint file removed: {checkpoint_file}")
-    """
