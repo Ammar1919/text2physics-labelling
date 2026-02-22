@@ -54,14 +54,6 @@ get_prompt(dataset_key)
 
 General utility functions used by the labelling pipeline.
 
-### `label_gpt/README.md`
-
-Project documentation.
-
-### `label_gpt/.gitignore`
-
-Ignores large files, cache folders, and environment directories.
-
 ## Input / Output Format
 
 ### Input NPZ
