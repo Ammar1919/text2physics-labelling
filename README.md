@@ -6,7 +6,7 @@ The current implementation focuses on generating high-quality structured caption
 
 ## File Structure and Roles
 
-### `label-gpt/labelling.py`
+### `label_gpt/labelling.py`
 
 Main labelling script.
 
