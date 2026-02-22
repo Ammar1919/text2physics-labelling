@@ -41,7 +41,7 @@ Sample mode:
 python labelling.py --dataset shear_flow --input ..\shear_flow_frame60.npz --output ..\datasets\labeled\shear_flow_sample.npz --sample 5
 ```
 
-### `label-gpt/base_prompt.py`
+### `label_gpt/base_prompt.py`
 
 Prompt templates and dataset-specific configuration.
 `labelling.py` retrieves prompts via:
@@ -50,15 +50,15 @@ Prompt templates and dataset-specific configuration.
 get_prompt(dataset_key)
 ```
 
-### `label-gpt/utils.py`
+### `label_gpt/utils.py`
 
 General utility functions used by the labelling pipeline.
 
-### `label-gpt/README.md`
+### `label_gpt/README.md`
 
 Project documentation.
 
-### `label-gpt/.gitignore`
+### `label_gpt/.gitignore`
 
 Ignores large files, cache folders, and environment directories.
 
