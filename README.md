@@ -87,32 +87,3 @@ Each `(field, label)` pair corresponds to one labelled data point.
 ```python
 reasoning={"effort":"high"}
 ```
-
-High reasoning effort is used to improve:
-
-- Structural decomposition quality
-- Boundary consistency
-- Hierarchical spatial interpretation
-- Format stability for scientific descriptions
-
-## Environment Setup
-
-```bash
-cd C:\Users\majun\Desktop\dataset\label-gpt
-conda activate t2p_label
-$env:OPENAI_API_KEY="your_key"
-```
-
-Install dependencies if needed:
-
-```bash
-pip install openai python-dotenv numpy matplotlib tqdm transformers
-```
-
-## Full Dataset Runs
-
-### Shear Flow
-
-```bash
-python labelling.py --dataset shear_flow --input ..\shear_flow_frame60.npz --output ..\datasets\labeled\shear_flow_labeled_openai.npz
-```
